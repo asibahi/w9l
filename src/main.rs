@@ -5,13 +5,13 @@ use std::{cell::OnceCell, error::Error, fmt::Write};
 fn main() -> Result<(), Box<dyn Error>> {
     println!("Hello, Hex!");
 
-    let size = 8;
+    let size = 3;
     let havannah_board = get_board(size);
     draw_board(havannah_board)
 }
 
 fn get_board(size: u32) -> impl ExactSizeIterator<Item = hexx::Hex> {
-    hexx::shapes::hexagon(hexx::hex(0, 0), size - 1)
+    hexx::shapes::hexagon(hexx::Hex::ZERO, size - 1)
 }
 
 fn draw_board(
@@ -30,7 +30,6 @@ fn draw_board(
         let radius = radius.get_or_init(|| rank.abs());
         let v_o = 2 * rank.abs() as usize;
         let j_o = 7 + v_o;
-    
 
         write!(top_jags, "{:>j_o$}", "")?;
         write!(values, "{:>v_o$}{:>5} ", "", rank.to_string().blue())?;
