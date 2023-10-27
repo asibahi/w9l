@@ -10,38 +10,48 @@ use std::collections::HashSet;
 type Error = Box<dyn std::error::Error>;
 
 #[derive(Debug)]
-pub struct Board {
+pub struct Board<const N: usize> {
     pub state: HashMap<Hex, Option<Player>>,
-
-    edges: [HashSet<Hex>; 6],
-    corners: [Hex; 6],
-
-    size: u32,
     to_move: Player,
     last_move: Option<Hex>,
 }
 
-impl Board {
-    pub fn new(size: u32) -> Self {
-        let radius = size - 1;
-        let state = hexx::shapes::hexagon(Hex::ZERO, radius)
+impl<const N: usize> Board<N> {
+    pub const SIZE: usize = N + 2;
+    pub const RADIUS: i32 = Self::SIZE as i32 - 1;
+    pub const CORNERS: [Hex; 6] = [
+        hex(0, Self::RADIUS).rotate_cw(0),
+        hex(0, Self::RADIUS).rotate_cw(1),
+        hex(0, Self::RADIUS).rotate_cw(2),
+        hex(0, Self::RADIUS).rotate_cw(3),
+        hex(0, Self::RADIUS).rotate_cw(4),
+        hex(0, Self::RADIUS).rotate_cw(5),
+    ];
+
+    pub const EDGES: [[Hex; N]; 6] = {
+        // gimme const array::from_fn pls
+        let mut outer = [[Hex::ZERO; N]; 6];
+        let mut i = 0;
+        while i < 6usize {
+            let mut inner: [Hex; N] = [Hex::ZERO; N];
+            let mut j = 0;
+            while j < N {
+                inner[j] = hex(-(1 + j as i32), Self::RADIUS).rotate_cw(i as u32);
+                j += 1;
+            }
+            outer[i] = inner;
+            i += 1;
+        }
+        outer
+    };
+
+    pub fn new() -> Self {
+        let state = hexx::shapes::hexagon(Hex::ZERO, Self::RADIUS as u32)
             .map(|h| (h, None))
             .collect::<HashMap<_, _>>();
 
-        let corners = std::array::from_fn(|i| hex(0, radius as i32).rotate_cw(i as u32));
-
-        let edges = std::array::from_fn(|i| {
-            let radius = radius as i32;
-            (1..radius)
-                .map(|j| hex(-j, radius).rotate_cw(i as u32))
-                .collect()
-        });
-
         Self {
             state,
-            edges,
-            corners,
-            size,
             to_move: Player::Black,
             last_move: None,
         }
