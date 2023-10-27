@@ -27,6 +27,9 @@ impl Player {
 pub struct Board {
     pub state: HashMap<Hex, Option<Player>>,
 
+    edges: HashSet<Hex>,
+    corners: HashSet<Hex>,
+
     size: u32,
     to_move: Player,
     last_move: Option<Hex>,
@@ -35,11 +38,11 @@ pub struct Board {
 impl Board {
     pub fn new(size: u32) -> Self {
         let radius = size - 1;
-        let board = hexx::shapes::hexagon(Hex::ZERO, radius)
+        let state = hexx::shapes::hexagon(Hex::ZERO, radius)
             .map(|h| (h, None))
             .collect::<HashMap<_, _>>();
 
-        let edges = board
+        let edges = state
             .keys()
             .filter(|h| {
                 (h.x.unsigned_abs() == radius)
@@ -49,7 +52,7 @@ impl Board {
             .copied()
             .collect::<HashSet<_>>();
 
-        let corners = board
+        let corners = state
             .keys()
             .filter(|h| {
                 ((h.x.unsigned_abs() == radius || h.x == 0)
@@ -60,7 +63,9 @@ impl Board {
             .collect::<HashSet<_>>();
 
         Self {
-            state: board,
+            state,
+            edges,
+            corners,
             size,
             to_move: Player::Black,
             last_move: None,
