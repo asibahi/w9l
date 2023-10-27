@@ -1,9 +1,9 @@
 #![allow(dead_code, unused)]
 pub mod ascii;
-pub mod player;
+pub mod stone;
 
 use hexx::{hex, Hex};
-use player::*;
+use stone::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
