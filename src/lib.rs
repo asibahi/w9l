@@ -1,34 +1,20 @@
 #![allow(dead_code, unused)]
+pub mod ascii;
+pub mod player;
 
-use hexx::Hex;
+use hexx::{hex, Hex};
+use player::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-pub mod ascii;
-
 type Error = Box<dyn std::error::Error>;
-
-#[derive(Clone, Copy, Debug)]
-pub enum Player {
-    Black,
-    White,
-}
-
-impl Player {
-    fn flip(&self) -> Self {
-        match self {
-            Player::Black => Player::White,
-            Player::White => Player::Black,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Board {
     pub state: HashMap<Hex, Option<Player>>,
 
-    edges: HashSet<Hex>,
-    corners: HashSet<Hex>,
+    edges: [HashSet<Hex>; 6],
+    corners: [Hex; 6],
 
     size: u32,
     to_move: Player,
@@ -42,25 +28,14 @@ impl Board {
             .map(|h| (h, None))
             .collect::<HashMap<_, _>>();
 
-        let edges = state
-            .keys()
-            .filter(|h| {
-                (h.x.unsigned_abs() == radius)
-                    ^ (h.y.unsigned_abs() == radius)
-                    ^ (h.z().unsigned_abs() == radius)
-            })
-            .copied()
-            .collect::<HashSet<_>>();
+        let corners = std::array::from_fn(|i| hex(0, radius as i32).rotate_cw(i as u32));
 
-        let corners = state
-            .keys()
-            .filter(|h| {
-                ((h.x.unsigned_abs() == radius || h.x == 0)
-                    && (h.y.unsigned_abs() == radius || h.y == 0))
-                    ^ (h.x == 0 && h.y == 0)
-            })
-            .copied()
-            .collect::<HashSet<_>>();
+        let edges = std::array::from_fn(|i| {
+            let radius = radius as i32;
+            (1..radius)
+                .map(|j| hex(-j, radius).rotate_cw(i as u32))
+                .collect()
+        });
 
         Self {
             state,
