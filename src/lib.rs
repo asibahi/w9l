@@ -30,19 +30,17 @@ impl<const N: usize> Board<N> {
 
     pub const EDGES: [[Hex; N]; 6] = {
         // gimme const array::from_fn pls
-        let mut outer = [[Hex::ZERO; N]; 6];
+        let mut edges = [[Hex::ZERO; N]; 6];
         let mut i = 0;
-        while i < 6usize {
-            let mut inner: [Hex; N] = [Hex::ZERO; N];
+        while i < 6 {
             let mut j = 0;
             while j < N {
-                inner[j] = hex(-(1 + j as i32), Self::RADIUS).rotate_cw(i as u32);
+                edges[i][j] = hex(-(1 + j as i32), Self::RADIUS).rotate_cw(i as u32);
                 j += 1;
             }
-            outer[i] = inner;
             i += 1;
         }
-        outer
+        edges
     };
 
     pub fn new() -> Self {
