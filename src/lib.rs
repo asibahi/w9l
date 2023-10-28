@@ -58,51 +58,42 @@ impl<const N: usize> Board<N> {
     }
 
     pub fn move_at(&mut self, hex: Hex) -> Result<(), Error> {
+        match self.state.get(&hex) {
+            None => return Err("Illegal Move: Hex out of bounds".into()),
+            Some(Some(_)) => return Err("Illegal Move: Hex already occupied".into()),
+            _ => {}
+        }
+
         // Get surrounding groups.
-        // Needs to be done before I borrow the `state` mutably.
-        let neighboring_groups = hex
+        let neighbor_groups = hex
             .all_neighbors()
             .iter()
             .filter_map(|h| {
-                self.state.get(h).and_then(|c| c.as_ref()).and_then(|s| {
-                    if s.owner == self.to_move {
-                        Some((*h, s.group_id))
-                    } else {
-                        None
-                    }
-                })
+                self.state
+                    .get(h)
+                    .and_then(|c| c.as_ref())
+                    .and_then(|s| (s.owner == self.to_move).then(|| (*h, s.group_id)))
             })
             .unique_by(|(_, gid)| *gid) // very important
             .collect::<Vec<_>>();
 
-        let Some(content) = self.state.get_mut(&hex) else {
-            return Err("Illegal Move: Hex out of bounds".into());
-        };
-        if content.is_some() {
-            return Err("Illegal Move: Hex already occupied".into());
-        }
-
-        // put the stone in the location.
+        // determine group membership
         let group_id = {
-            if neighboring_groups.is_empty() {
+            if neighbor_groups.is_empty() {
                 // no surrounding stones.
                 self.groups.insert_with_key(Group::new)
             } else {
                 // one or more surrounding stones. Just pick one.
-                neighboring_groups[0].1
+                neighbor_groups[0].1
             }
         };
-        _ = content.insert(Stone {
-            owner: self.to_move,
-            group_id,
-        });
 
         // if the surrounding stones belong to different groups (have different group ID's)
-        if neighboring_groups.len() >= 2 {
+        if neighbor_groups.len() >= 2 {
             // take out the groups to be merged and remove them from the slotmap
-            let grps_to_be_merged = (1..neighboring_groups.len())
+            let grps_to_be_merged = (1..neighbor_groups.len())
                 .map(|i| {
-                    let working_id = neighboring_groups[i].1;
+                    let working_id = neighbor_groups[i].1;
                     self.groups.remove(working_id).unwrap_or_else(|| {
                         let actual_id = self
                             .groups
@@ -133,10 +124,16 @@ impl<const N: usize> Board<N> {
             }
 
             // semi-clean up : all neighboring stones are set to the final group.
-            for (h, _) in neighboring_groups {
+            for (h, _) in neighbor_groups {
                 self.state.get_mut(&h).unwrap().as_mut().unwrap().group_id = group_id;
             }
         }
+
+        // place the stone
+        _ = self.state.get_mut(&hex).unwrap().insert(Stone {
+            owner: self.to_move,
+            group_id,
+        });
 
         // AND FINALLY
         self.last_move = Some(hex);
