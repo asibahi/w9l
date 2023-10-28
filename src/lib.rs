@@ -10,6 +10,11 @@ use stone::*;
 
 type Error = Box<dyn std::error::Error>;
 
+pub enum GameState {
+    Win(Player),
+    Ongoing,
+}
+
 #[derive(Debug)]
 pub struct Board<const N: usize> {
     pub state: HashMap<Hex, Option<Stone>>,
@@ -57,22 +62,22 @@ impl<const N: usize> Board<N> {
         }
     }
 
-    pub fn move_at(&mut self, hex: Hex) -> Result<(), Error> {
-        match self.state.get(&hex) {
+    pub fn move_at(&mut self, input_hex: Hex) -> Result<GameState, Error> {
+        match self.state.get(&input_hex) {
             None => return Err("Illegal Move: Hex out of bounds".into()),
             Some(Some(_)) => return Err("Illegal Move: Hex already occupied".into()),
             _ => {}
         }
 
         // Get surrounding groups.
-        let neighbor_groups = hex
+        let neighbor_groups = input_hex
             .all_neighbors()
             .iter()
             .filter_map(|h| {
                 self.state
                     .get(h)
                     .and_then(|c| c.as_ref())
-                    .and_then(|s| (s.owner == self.to_move).then(|| (*h, s.group_id)))
+                    .and_then(|s| (s.owner == self.to_move).then_some((*h, s.group_id)))
             })
             .unique_by(|(_, gid)| *gid) // very important
             .collect::<Vec<_>>();
@@ -93,14 +98,13 @@ impl<const N: usize> Board<N> {
             // take out the groups to be merged and remove them from the slotmap
             let grps_to_be_merged = (1..neighbor_groups.len())
                 .map(|i| {
-                    let working_id = neighbor_groups[i].1;
+                    let (_, working_id) = neighbor_groups[i];
                     self.groups.remove(working_id).unwrap_or_else(|| {
-                        let actual_id = self
+                        let (actual_id, _) = self
                             .groups
                             .iter()
                             .find(|(_, g)| g.merged_with(&working_id))
-                            .expect("GroupId not found for any Group.")
-                            .0;
+                            .expect("GroupId not found for any Group.");
 
                         self.groups.remove(actual_id).unwrap()
                     })
@@ -108,16 +112,7 @@ impl<const N: usize> Board<N> {
                 .collect::<Vec<_>>();
 
             // determine the placed stone's group as the chosen one
-            let final_group = self.groups.get_mut(group_id);
-            let final_group = match final_group {
-                // manual unwrap_or_else;
-                Some(g) => g,
-                None => self
-                    .groups
-                    .values_mut()
-                    .find(|g| g.merged_with(&group_id))
-                    .expect("GroupId not found for any Group."),
-            };
+            let mut final_group = self.get_mut_group(group_id);
 
             for grp in grps_to_be_merged {
                 final_group.merge(&grp);
@@ -130,16 +125,40 @@ impl<const N: usize> Board<N> {
         }
 
         // place the stone
-        _ = self.state.get_mut(&hex).unwrap().insert(Stone {
+        _ = self.state.get_mut(&input_hex).unwrap().insert(Stone {
             owner: self.to_move,
             group_id,
         });
 
+        // update flags
+        let group = self.get_mut_group(group_id);
+        for i in 0..6 {
+            if input_hex == Self::CORNERS[i] {
+                group.add_corner(i);
+            }
+            if Self::EDGES[i].contains(&input_hex) {
+                group.add_edge(i)
+            }
+        }
+
+        // check wins
+        if group.is_bridge() || group.is_fork() {
+            return Ok(GameState::Win(self.to_move));
+        }
+
         // AND FINALLY
-        self.last_move = Some(hex);
+        self.last_move = Some(input_hex);
         self.to_move = self.to_move.flip();
 
-        Ok(())
+        Ok(GameState::Ongoing)
+    }
+
+    fn get_mut_group(&mut self, group_id: GroupId) -> &mut Group {
+        match self.groups.get(group_id) {
+            Some(_) => self.groups.get_mut(group_id),
+            None => self.groups.values_mut().find(|g| g.merged_with(&group_id)),
+        }
+        .expect("GroupId not found for any Group.")
     }
 }
 

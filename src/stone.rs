@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use slotmap::new_key_type;
-use ux::u6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Player {
@@ -27,15 +26,15 @@ new_key_type! { pub struct GroupId; }
 
 #[derive(Debug)]
 pub struct Group {
-    edges: u6,
-    corners: u6,
+    edges: u8,
+    corners: u8,
     merged_ids: HashSet<GroupId>,
 }
 impl Group {
     pub fn new(id: GroupId) -> Self {
         Self {
-            edges: u6::new(0),
-            corners: u6::new(0),
+            edges: 0,
+            corners: 0,
             merged_ids: HashSet::from([id]),
         }
     }
@@ -48,5 +47,23 @@ impl Group {
 
     pub fn merged_with(&self, id: &GroupId) -> bool {
         self.merged_ids.contains(id)
+    }
+
+    pub fn add_corner(&mut self, index: usize) {
+        assert!(index < 6);
+        self.corners |= (1 << index)
+    }
+
+    pub fn add_edge(&mut self, index: usize) {
+        assert!(index < 6);
+        self.edges |= (1 << index)
+    }
+
+    pub fn is_bridge(&self) -> bool {
+        u8::count_ones(self.corners) >= 2
+    }
+
+    pub fn is_fork(&self) -> bool {
+        u8::count_ones(self.edges) >= 3
     }
 }
