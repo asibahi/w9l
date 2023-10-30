@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use hexx::{Direction, Hex};
+use itertools::Itertools;
 use slotmap::new_key_type;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +30,7 @@ new_key_type! { pub struct GroupId; }
 pub struct Group {
     edges: u8,
     corners: u8,
+    stones: Vec<Hex>,
     merged_ids: HashSet<GroupId>,
 }
 impl Group {
@@ -35,6 +38,7 @@ impl Group {
         Self {
             edges: 0,
             corners: 0,
+            stones: Vec::new(),
             merged_ids: HashSet::from([id]),
         }
     }
@@ -42,6 +46,7 @@ impl Group {
     pub fn merge(&mut self, other: &Self) {
         self.edges |= other.edges;
         self.corners |= other.corners;
+        self.stones.extend(&other.stones);
         self.merged_ids.extend(&other.merged_ids);
     }
 
@@ -49,21 +54,45 @@ impl Group {
         self.merged_ids.contains(id)
     }
 
-    pub fn add_corner(&mut self, index: usize) {
-        assert!(index < 6);
-        self.corners |= (1 << index)
+    pub fn add_hex_and_check_ring(&mut self, hex: Hex) -> bool {
+        self.stones.push(hex);
+
+        // algo from http://havannah.ewalds.ca/static/thesis.pdf
+        // No ring for smaller groups
+        self.stones.len() >= 6
+        // new stone is connected to at least two stones in the same group.
+            && self
+                .stones
+                .iter()
+                .filter(|h| h.neighbor_direction(hex).is_some())
+                .count()
+                >= 2
+        // Search for self. 
+            && Direction::ALL_DIRECTIONS[..4]
+                .into_iter()
+                .any(|&dir| self.search_dir(hex, dir, hex))
     }
 
-    pub fn add_edge(&mut self, index: usize) {
-        assert!(index < 6);
-        self.edges |= (1 << index)
+    fn search_dir(&self, current: Hex, dir: Direction, target: Hex) -> bool {
+        let current = current + dir;
+        current == target
+            || (self.stones.contains(&current)
+                && (self.search_dir(current, dir.clockwise(), target)
+                    || self.search_dir(current, dir, target)
+                    || self.search_dir(current, dir.counter_clockwise(), target)
+                    )
+                )
     }
 
-    pub fn is_bridge(&self) -> bool {
+    pub fn add_corner_and_check_bridge(&mut self, index: usize) -> bool {
+        assert!(index < 6);
+        self.corners |= (1 << index);
         u8::count_ones(self.corners) >= 2
     }
 
-    pub fn is_fork(&self) -> bool {
+    pub fn add_edge_and_check_fork(&mut self, index: usize) -> bool {
+        assert!(index < 6);
+        self.edges |= (1 << index);
         u8::count_ones(self.edges) >= 3
     }
 }

@@ -11,8 +11,15 @@ use stone::*;
 type Error = Box<dyn std::error::Error>;
 
 pub enum GameState {
-    Win(Player),
+    Win(Player, WinCon),
+    Draw,
     Ongoing,
+}
+
+pub enum WinCon {
+    Bridge, // connect two corners
+    Fork,   // connect three edges
+    Ring,   // encricle a cell
 }
 
 #[derive(Debug)]
@@ -21,11 +28,13 @@ pub struct Board<const N: usize> {
     to_move: Player,
     last_move: Option<Hex>,
     groups: SlotMap<GroupId, Group>,
+    turn: usize,
 }
 
 impl<const N: usize> Board<N> {
     pub const SIZE: usize = N + 2;
     pub const RADIUS: i32 = Self::SIZE as i32 - 1;
+    pub const CELL_COUNT: usize = 1 + 3 * (N + 1) * (N + 2); // RedBlob
     pub const CORNERS: [Hex; 6] = [
         hex(0, Self::RADIUS).rotate_cw(0),
         hex(0, Self::RADIUS).rotate_cw(1),
@@ -59,6 +68,7 @@ impl<const N: usize> Board<N> {
             to_move: Player::Black,
             last_move: None,
             groups: SlotMap::with_key(),
+            turn: 0,
         }
     }
 
@@ -130,27 +140,42 @@ impl<const N: usize> Board<N> {
             group_id,
         });
 
-        // update flags
+        // update board and group and check wins
+        self.last_move = Some(input_hex);
         let group = self.get_mut_group(group_id);
-        for i in 0..6 {
-            if input_hex == Self::CORNERS[i] {
-                group.add_corner(i);
-            }
-            if Self::EDGES[i].contains(&input_hex) {
-                group.add_edge(i)
-            }
-        }
 
-        // check wins
-        if group.is_bridge() || group.is_fork() {
-            return Ok(GameState::Win(self.to_move));
+        if group.add_hex_and_check_ring(input_hex) {
+            return Ok(GameState::Win(self.to_move, WinCon::Ring));
+        }
+        // only loop if input_hex is corner or edge
+        if input_hex.x.abs() == Self::RADIUS
+            || input_hex.y.abs() == Self::RADIUS
+            || input_hex.z().abs() == Self::RADIUS
+        {
+            for i in 0..6 {
+                if input_hex == Self::CORNERS[i] {
+                    if group.add_corner_and_check_bridge(i) {
+                        return Ok(GameState::Win(self.to_move, WinCon::Bridge));
+                    }
+                    break;
+                }
+                if Self::EDGES[i].contains(&input_hex) {
+                    if group.add_edge_and_check_fork(i) {
+                        return Ok(GameState::Win(self.to_move, WinCon::Fork));
+                    }
+                    break;
+                }
+            }
         }
 
         // AND FINALLY
-        self.last_move = Some(input_hex);
-        self.to_move = self.to_move.flip();
-
-        Ok(GameState::Ongoing)
+        self.turn += 1;
+        if self.turn >= Self::CELL_COUNT {
+            Ok(GameState::Draw)
+        } else {
+            self.to_move = self.to_move.flip();
+            Ok(GameState::Ongoing)
+        }
     }
 
     fn get_mut_group(&mut self, group_id: GroupId) -> &mut Group {
