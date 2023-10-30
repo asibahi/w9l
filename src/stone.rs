@@ -79,20 +79,24 @@ impl Group {
             || (self.stones.contains(&current)
                 && (self.search_dir(current, dir.clockwise(), target)
                     || self.search_dir(current, dir, target)
-                    || self.search_dir(current, dir.counter_clockwise(), target)
-                    )
-                )
+                    || self.search_dir(current, dir.counter_clockwise(), target)))
     }
 
-    pub fn add_corner_and_check_bridge(&mut self, index: usize) -> bool {
+    pub fn add_corner(&mut self, index: usize) {
         assert!(index < 6);
         self.corners |= (1 << index);
+    }
+
+    pub fn add_edge(&mut self, index: usize) {
+        assert!(index < 6);
+        self.edges |= (1 << index);
+    }
+
+    pub fn check_bridge(&self) -> bool {
         u8::count_ones(self.corners) >= 2
     }
 
-    pub fn add_edge_and_check_fork(&mut self, index: usize) -> bool {
-        assert!(index < 6);
-        self.edges |= (1 << index);
+    pub fn check_fork(&self) -> bool {
         u8::count_ones(self.edges) >= 3
     }
 }

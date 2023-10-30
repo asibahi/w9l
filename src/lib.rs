@@ -154,18 +154,21 @@ impl<const N: usize> Board<N> {
         {
             for i in 0..6 {
                 if input_hex == Self::CORNERS[i] {
-                    if group.add_corner_and_check_bridge(i) {
-                        return Ok(GameState::Win(self.to_move, WinCon::Bridge));
-                    }
+                    group.add_corner(i);
                     break;
                 }
                 if Self::EDGES[i].contains(&input_hex) {
-                    if group.add_edge_and_check_fork(i) {
-                        return Ok(GameState::Win(self.to_move, WinCon::Fork));
-                    }
+                    group.add_edge(i);
                     break;
                 }
             }
+        }
+
+        if group.check_bridge() {
+            return Ok(GameState::Win(self.to_move, WinCon::Bridge));
+        }
+        if group.check_fork() {
+            return Ok(GameState::Win(self.to_move, WinCon::Fork));
         }
 
         // AND FINALLY
