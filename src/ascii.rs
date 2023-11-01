@@ -38,11 +38,36 @@ fn draw_board(
         )?;
         write!(bot_jags, "{:>j_o$}", "")?;
 
-        for _ in row {
+        for hex in row {
+           let fill = match hex.to_cubic_array().map(|c| (c / radius)) {
+                // battlefield
+                [0, 0, 0] => "",
+    
+                // edges
+                [0, y, 0] if y > 0 => "e0",
+                [x, 0, 0] if x < 0 => "e1",
+                [0, 0, z] if z > 0 => "e2",
+                [0, _, 0] => "e3",
+                [_, 0, 0] => "e4",
+                [0, 0, _] => "e5",
+    
+                // corners
+                [x, _, 0] if x < 0 => "c",
+                [x, 0, _] if x < 0 => "c",
+                [0, y, _] if y < 0 => "c",
+                [_, _, 0] => "c",
+                [_, 0, _] => "c",
+                [0, _, _] => "c",
+    
+                // else
+                _ => unreachable!("out of bounds"),
+            };
+
+
             if rank <= 0 {
                 write!(top_jags, "{} \\ ", "/".purple())?;
             }
-            write!(values, "{}{:>2} ", "|".blue(), "")?;
+            write!(values, "{}{:>2} ", "|".blue(), fill)?;
             if rank >= 0 {
                 write!(bot_jags, "\\ {} ", "/".purple())?;
             }

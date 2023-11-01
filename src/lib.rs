@@ -23,7 +23,7 @@ pub enum WinCon {
 }
 
 #[derive(Debug)]
-pub struct Board<const N: usize> {
+pub struct Board<const RADIUS: usize> {
     pub state: HashMap<Hex, Option<Stone>>,
     to_move: Player,
     last_move: Option<Hex>,
@@ -31,35 +31,12 @@ pub struct Board<const N: usize> {
     turn: usize,
 }
 
-impl<const N: usize> Board<N> {
-    pub const SIZE: usize = N + 2;
-    pub const RADIUS: i32 = Self::SIZE as i32 - 1;
-    pub const CELL_COUNT: usize = 1 + 3 * (N + 1) * (N + 2); // RedBlob
-    pub const CORNERS: [Hex; 6] = [
-        hex(0, Self::RADIUS).rotate_cw(0),
-        hex(0, Self::RADIUS).rotate_cw(1),
-        hex(0, Self::RADIUS).rotate_cw(2),
-        hex(0, Self::RADIUS).rotate_cw(3),
-        hex(0, Self::RADIUS).rotate_cw(4),
-        hex(0, Self::RADIUS).rotate_cw(5),
-    ];
-    pub const EDGES: [[Hex; N]; 6] = {
-        // gimme const array::from_fn pls
-        let mut edges = [[Hex::ZERO; N]; 6];
-        let mut i = 0;
-        while i < 6 {
-            let mut j = 0;
-            while j < N {
-                edges[i][j] = hex(-(1 + j as i32), Self::RADIUS).rotate_cw(i as u32);
-                j += 1;
-            }
-            i += 1;
-        }
-        edges
-    };
+impl<const RADIUS: usize> Board<RADIUS> {
+    pub const SIZE: usize = RADIUS + 1;
+    const CELL_COUNT: usize = 1 + 3 * RADIUS * (RADIUS + 1); // RedBlob
 
     pub fn new() -> Self {
-        let state = hexx::shapes::hexagon(Hex::ZERO, Self::RADIUS as u32)
+        let state = hexx::shapes::hexagon(Hex::ZERO, RADIUS as u32)
             .map(|h| (h, None))
             .collect::<HashMap<_, _>>();
 
@@ -147,21 +124,32 @@ impl<const N: usize> Board<N> {
         if group.add_hex_and_check_ring(input_hex) {
             return Ok(GameState::Win(self.to_move, WinCon::Ring));
         }
-        // only loop if input_hex is corner or edge
-        if input_hex.x.abs() == Self::RADIUS
-            || input_hex.y.abs() == Self::RADIUS
-            || input_hex.z().abs() == Self::RADIUS
-        {
-            for i in 0..6 {
-                if input_hex == Self::CORNERS[i] {
-                    group.add_corner(i);
-                    break;
-                }
-                if Self::EDGES[i].contains(&input_hex) {
-                    group.add_edge(i);
-                    break;
-                }
-            }
+
+        // if input_hex is corner or edge
+        match input_hex.to_cubic_array().map(|c| (c / RADIUS as i32)) {
+            // battlefield
+            [0, 0, 0] => {}
+
+            // goes around the board in order
+            // extensive ascii testing led here
+
+            // edges
+            [0, y, 0] if y > 0 => group.add_edge(0),
+            [x, 0, 0] if x < 0 => group.add_edge(1),
+            [0, 0, z] if z > 0 => group.add_edge(2),
+            [0, _, 0] => group.add_edge(3),
+            [_, 0, 0] => group.add_edge(4),
+            [0, 0, _] => group.add_edge(5),
+
+            // corners
+            [x, _, 0] if x < 0 => group.add_corner(0),
+            [x, 0, _] if x < 0 => group.add_corner(1),
+            [0, y, _] if y < 0 => group.add_corner(2),
+            [_, _, 0] => group.add_corner(3),
+            [_, 0, _] => group.add_corner(4),
+            [0, _, _] => group.add_corner(5),
+
+            _ => unreachable!("out of bounds"),
         }
 
         if group.check_bridge() {
@@ -190,7 +178,7 @@ impl<const N: usize> Board<N> {
     }
 }
 
-impl<const N: usize> Default for Board<N> {
+impl<const RADIUS: usize> Default for Board<RADIUS> {
     fn default() -> Self {
         Self::new()
     }
