@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use hexx::{Direction, Hex};
 use itertools::Itertools;
 use slotmap::new_key_type;
@@ -31,15 +29,13 @@ pub struct Group {
     edges: u8,
     corners: u8,
     stones: Vec<Hex>,
-    merged_ids: HashSet<GroupId>,
 }
 impl Group {
-    pub fn new(id: GroupId) -> Self {
+    pub fn new() -> Self {
         Self {
             edges: 0,
             corners: 0,
             stones: Vec::new(),
-            merged_ids: HashSet::from([id]),
         }
     }
 
@@ -47,11 +43,6 @@ impl Group {
         self.edges |= other.edges;
         self.corners |= other.corners;
         self.stones.extend(&other.stones);
-        self.merged_ids.extend(&other.merged_ids);
-    }
-
-    pub fn merged_with(&self, id: &GroupId) -> bool {
-        self.merged_ids.contains(id)
     }
 
     pub fn add_hex_and_check_ring(&mut self, hex: Hex) -> bool {
