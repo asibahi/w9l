@@ -1,6 +1,7 @@
 use hexx::Hex;
 
-use w9l::board_1::{Board, GameState, WinCon};
+use w9l::game_data::*;
+use w9l::impl_1::Board;
 
 fn main() {
     {

@@ -1,26 +1,14 @@
-use crate::stone_1::*;
+use crate::game_data::*;
 use colored::Colorize;
-use hexx::Hex;
+use hexx::{Direction, Hex};
 use itertools::Itertools;
 use slotmap::SlotMap;
 use std::{
     cell::OnceCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     error::Error,
     fmt::{Display, Write},
 };
-
-pub enum GameState {
-    Win(Player, WinCon),
-    Draw,
-    Ongoing,
-}
-
-pub enum WinCon {
-    Bridge, // connect two corners
-    Fork,   // connect three edges
-    Ring,   // encricle a cell
-}
 
 #[derive(Debug)]
 pub struct Board<const RADIUS: usize> {
@@ -184,89 +172,83 @@ impl<const RADIUS: usize> Default for Board<RADIUS> {
     }
 }
 
-fn draw_game_position(
-    havannah_board: &HashMap<Hex, Option<Stone>>,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    let rows = havannah_board
-        .into_iter()
-        .sorted_by_key(|(h, _)| (h.x, h.y))
-        //.sorted_by_key(|(h, _)| h.x)
-        .group_by(|(h, _)| h.x);
-    let radius = OnceCell::new();
-
-    let mut top_jags = String::from("\n");
-    let mut values = String::new();
-    let mut bot_jags = String::new();
-
-    let mut file_idxs = String::new();
-
-    for (rank, row) in &rows {
-        let radius = radius.get_or_init(|| rank.abs());
-        let v_o = 2 * rank.unsigned_abs() as usize;
-        let j_o = 7 + v_o;
-
-        write!(top_jags, "{:>j_o$}", "")?;
-        write!(
-            values,
-            "{:>v_o$}{:>5} ",
-            "",
-            // (radius - rank + 1).to_string().blue()
-            rank.to_string().blue()
-        )?;
-        write!(bot_jags, "{:>j_o$}", "")?;
-
-        for (_, content) in row {
-            let fill = match content {
-                Some(s) => match s.owner {
-                    Player::Black => "b",
-                    Player::White => "w",
-                },
-                None => "",
-            };
-
-            if rank <= 0 {
-                write!(top_jags, "{} \\ ", "/".purple())?;
-            }
-            write!(values, "{}{:>2} ", "|".blue(), fill)?;
-            if rank >= 0 {
-                write!(bot_jags, "\\ {} ", "/".purple())?;
-            }
-        }
-
-        write!(values, "{}", "|".blue())?;
-        if rank > 0 {
-            let _file = (b'a' as i32 + 2 * radius - rank + 1) as u8 as char;
-            write!(values, " {}", (radius - rank + 1).to_string().purple())?;
-            // write!(values, " {}", file.to_string().purple())?;
-        } else {
-            let _file = (rank + radius + b'a' as i32) as u8 as char;
-            write!(file_idxs, "{:>4}", rank)?;
-            // write!(file_idxs, "{:>4}", file)?;
-        }
-
-        if rank == *radius {
-            writeln!(bot_jags, "\n{:>j_o$}{}", "", file_idxs.purple())?;
-        }
-
-        if rank <= 0 {
-            writeln!(f, "{}", top_jags)?;
-        }
-        writeln!(f, "{}", values)?;
-        if rank >= 0 {
-            writeln!(f, "{}", bot_jags)?;
-        }
-
-        top_jags.clear();
-        values.clear();
-        bot_jags.clear();
+impl<const RADIUS: usize> Display for Board<RADIUS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::ascii::draw_game_position(&self.state, f)
     }
-
-    Ok(())
 }
 
-impl<const N: usize> Display for Board<N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        draw_game_position(&self.state, f)
+#[derive(Debug)]
+pub struct Group {
+    edges: u8,
+    corners: u8,
+    stones: Vec<Hex>,
+    merged_ids: HashSet<GroupId>,
+}
+impl Group {
+    pub fn new(id: GroupId) -> Self {
+        Self {
+            edges: 0,
+            corners: 0,
+            stones: Vec::new(),
+            merged_ids: HashSet::from([id]),
+        }
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        self.edges |= other.edges;
+        self.corners |= other.corners;
+        self.stones.extend(&other.stones);
+        self.merged_ids.extend(&other.merged_ids);
+    }
+
+    pub fn merged_with(&self, id: &GroupId) -> bool {
+        self.merged_ids.contains(id)
+    }
+
+    pub fn add_hex_and_check_ring(&mut self, hex: Hex) -> bool {
+        self.stones.push(hex);
+
+        // algo from http://havannah.ewalds.ca/static/thesis.pdf
+        // No ring for smaller groups
+        self.stones.len() >= 6
+        // new stone is connected to at least two stones in the same group.
+            && self
+                .stones
+                .iter()
+                .filter(|h| h.neighbor_direction(hex).is_some())
+                .count()
+                >= 2
+        // Search for self. 
+            && Direction::ALL_DIRECTIONS[..4]
+                .into_iter()
+                .any(|&dir| self.search_dir(hex, dir, hex))
+    }
+
+    fn search_dir(&self, current: Hex, dir: Direction, target: Hex) -> bool {
+        let current = current + dir;
+        current == target
+            || (self.stones.contains(&current)
+                && (self.search_dir(current, dir.clockwise(), target)
+                    || self.search_dir(current, dir, target)
+                    || self.search_dir(current, dir.counter_clockwise(), target)))
+    }
+
+    pub fn add_corner(&mut self, index: usize) {
+        assert!(index < 6);
+        self.corners |= 1 << index;
+    }
+
+    pub fn add_edge(&mut self, index: usize) {
+        assert!(index < 6);
+        self.edges |= 1 << index;
+    }
+
+    pub fn check_bridge(&self) -> bool {
+        u8::count_ones(self.corners) >= 2
+    }
+
+    pub fn check_fork(&self) -> bool {
+        u8::count_ones(self.edges) >= 3
     }
 }

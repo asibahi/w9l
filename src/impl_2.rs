@@ -1,27 +1,10 @@
-
-
-use hexx::{hex, Hex};
-use itertools::{
-    Either::{self, Left, Right},
-    Itertools,
-};
+use crate::game_data::*;
+use hexx::{hex, Direction, Hex};
+use itertools::Either::{self, Left, Right};
 use slotmap::SlotMap;
 use std::collections::HashMap;
-use crate::stone_2::*;
 
 type Error = Box<dyn std::error::Error>;
-
-pub enum GameState {
-    Win(Player, WinCon),
-    Draw,
-    Ongoing,
-}
-
-pub enum WinCon {
-    Bridge, // connect two corners
-    Fork,   // connect three edges
-    Ring,   // encricle a cell
-}
 
 #[derive(Debug)]
 pub struct Board<const RADIUS: usize> {
@@ -178,5 +161,73 @@ impl<const RADIUS: usize> Board<RADIUS> {
 impl<const RADIUS: usize> Default for Board<RADIUS> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Debug)]
+pub struct Group {
+    edges: u8,
+    corners: u8,
+    stones: Vec<Hex>,
+}
+impl Group {
+    pub fn new() -> Self {
+        Self {
+            edges: 0,
+            corners: 0,
+            stones: Vec::new(),
+        }
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        self.edges |= other.edges;
+        self.corners |= other.corners;
+        self.stones.extend(&other.stones);
+    }
+
+    pub fn add_hex_and_check_ring(&mut self, hex: Hex) -> bool {
+        self.stones.push(hex);
+
+        // algo from http://havannah.ewalds.ca/static/thesis.pdf
+        // No ring for smaller groups
+        self.stones.len() >= 6
+        // new stone is connected to at least two stones in the same group.
+            && self
+                .stones
+                .iter()
+                .filter(|h| h.neighbor_direction(hex).is_some())
+                .count()
+                >= 2
+        // Search for self. 
+            && Direction::ALL_DIRECTIONS[..4]
+                .into_iter()
+                .any(|&dir| self.search_dir(hex, dir, hex))
+    }
+
+    fn search_dir(&self, current: Hex, dir: Direction, target: Hex) -> bool {
+        let current = current + dir;
+        current == target
+            || (self.stones.contains(&current)
+                && (self.search_dir(current, dir.clockwise(), target)
+                    || self.search_dir(current, dir, target)
+                    || self.search_dir(current, dir.counter_clockwise(), target)))
+    }
+
+    pub fn add_corner(&mut self, index: usize) {
+        assert!(index < 6);
+        self.corners |= (1 << index);
+    }
+
+    pub fn add_edge(&mut self, index: usize) {
+        assert!(index < 6);
+        self.edges |= (1 << index);
+    }
+
+    pub fn check_bridge(&self) -> bool {
+        u8::count_ones(self.corners) >= 2
+    }
+
+    pub fn check_fork(&self) -> bool {
+        u8::count_ones(self.edges) >= 3
     }
 }
