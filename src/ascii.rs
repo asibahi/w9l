@@ -1,4 +1,4 @@
-use crate::game_data::*;
+use crate::game_data::{self, *};
 use colored::Colorize;
 use hexx::Hex;
 use itertools::Itertools;
@@ -179,7 +179,6 @@ fn draw_board_flat(radius: u32) -> Result<(), Box<dyn Error>> {
         tracker += bt_rgt;
     }
 
-    println!("{}", f);
     Ok(())
 }
 
@@ -188,78 +187,74 @@ pub fn draw_game_position<const RADIUS: usize>(
     havannah_board: &HashMap<Hex, Option<Stone>>,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
-    let rows = havannah_board
-        .into_iter()
-        .sorted_by_key(|(h, _)| (h.x, h.y))
-        //.sorted_by_key(|(h, _)| h.x)
-        .group_by(|(h, _)| h.x);
-    let radius = OnceCell::new();
+    // starting hex [x, y, z]
+    let mut tracker = Hex::new(RADIUS as i32, 0); // [radius, 0, -radius]
 
-    let mut top_jags = String::from("\n");
-    let mut values = String::new();
-    let mut bot_jags = String::new();
+    let fill = |h| match havannah_board[&h] {
+        Some(Stone {
+            owner: game_data::Player::Black,
+            ..
+        }) => "◯",
+        Some(Stone {
+            owner: game_data::Player::White,
+            ..
+        }) => "⬤",
+        None => "",
+    };
 
-    let mut file_idxs = String::new();
+    // directions
+    let bt_lft = Hex::new(-1, 1);
+    let bottom = Hex::new(-1, 0);
+    let bt_rgt = Hex::new(0, -1);
+    let dia_rgt = Hex::new(1, -2);
 
-    for (rank, row) in &rows {
-        let radius = radius.get_or_init(|| rank.abs());
-        let v_o = 2 * rank.unsigned_abs() as usize;
-        let j_o = 7 + v_o;
+    writeln!(f, "{:<pad$}__", "", pad = 3 * RADIUS + 1)?;
 
-        write!(top_jags, "{:>j_o$}", "")?;
-        write!(
-            values,
-            "{:>v_o$}{:>5} ",
-            "",
-            // (radius - rank + 1).to_string().blue()
-            rank.to_string().blue()
-        )?;
-        write!(bot_jags, "{:>j_o$}", "")?;
-
-        for (_, content) in row {
-            let fill = match content {
-                Some(s) => match s.owner {
-                    Player::Black => "b",
-                    Player::White => "w",
-                },
-                None => "",
-            };
-
-            if rank <= 0 {
-                write!(top_jags, "{} \\ ", "/".purple())?;
-            }
-            write!(values, "{}{:>2} ", "|".blue(), fill)?;
-            if rank >= 0 {
-                write!(bot_jags, "\\ {} ", "/".purple())?;
-            }
+    for i in (0..RADIUS).rev() {
+        let mut cursor = tracker;
+        write!(f, "{:<pad$}__/", "", pad = 3 * i + 1)?;
+        // inner cells
+        for _ in 0..(RADIUS - i - 1) {
+            write!(f, "{:>2}\\__/", fill(cursor))?;
+            cursor += dia_rgt;
         }
 
-        write!(values, "{}", "|".blue())?;
-        if rank > 0 {
-            let _file = (b'a' as i32 + 2 * radius - rank + 1) as u8 as char;
-            write!(values, " {}", (radius - rank + 1).to_string().purple())?;
-            // write!(values, " {}", file.to_string().purple())?;
-        } else {
-            let _file = (rank + radius + b'a' as i32) as u8 as char;
-            write!(file_idxs, "{:>4}", rank)?;
-            // write!(file_idxs, "{:>4}", file)?;
-        }
+        writeln!(f, "{:>2}\\__", fill(cursor))?;
+        tracker += bt_lft;
+    }
 
-        if rank == *radius {
-            writeln!(bot_jags, "\n{:>j_o$}{}", "", file_idxs.purple())?;
+    for i in 0..=RADIUS {
+        // top line
+        let mut cursor = tracker;
+        write!(f, "/")?;
+        for _ in 0..RADIUS {
+            write!(f, "{:>2}\\__/", fill(cursor))?;
+            cursor += dia_rgt;
         }
+        writeln!(f, "{:>2}\\", fill(cursor))?;
 
-        if rank <= 0 {
-            writeln!(f, "{}", top_jags)?;
+        // bottom line
+        cursor = tracker + bt_rgt;
+        for _ in 0..RADIUS {
+            write!(f, "\\__/{:>2}", fill(cursor))?;
+            cursor += dia_rgt;
         }
-        writeln!(f, "{}", values)?;
-        if rank >= 0 {
-            writeln!(f, "{}", bot_jags)?;
-        }
+        writeln!(f, "\\__/")?;
+        tracker += bottom;
+    }
 
-        top_jags.clear();
-        values.clear();
-        bot_jags.clear();
+    tracker += dia_rgt;
+
+    for i in 0..RADIUS {
+        let mut cursor = tracker;
+        write!(f, "{:>pad$}", "", pad = 3 * i + 3)?;
+
+        for _ in 0..(RADIUS - i - 1) {
+            write!(f, "\\__/{:>2}", fill(cursor))?;
+            cursor += dia_rgt;
+        }
+        writeln!(f, "\\__/")?;
+        tracker += bt_rgt;
     }
 
     Ok(())
