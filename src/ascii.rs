@@ -184,7 +184,7 @@ fn draw_board_flat(radius: u32) -> Result<(), Box<dyn Error>> {
 }
 
 // print the boards in impl_1 and impl_2
-pub fn draw_game_position(
+pub fn draw_game_position<const RADIUS: usize>(
     havannah_board: &HashMap<Hex, Option<Stone>>,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {

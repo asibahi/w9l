@@ -166,15 +166,10 @@ impl<const RADIUS: usize> Board<RADIUS> {
     }
 }
 
-impl<const RADIUS: usize> Default for Board<RADIUS> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl<const RADIUS: usize> Display for Board<RADIUS> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        crate::ascii::draw_game_position(&self.state, f)
+        crate::ascii::draw_game_position::<RADIUS>(&self.state, f)
     }
 }
 

@@ -2,7 +2,7 @@ use crate::game_data::*;
 use hexx::{hex, Direction, Hex};
 use itertools::Either::{self, Left, Right};
 use slotmap::SlotMap;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 type Error = Box<dyn std::error::Error>;
 
@@ -158,9 +158,10 @@ impl<const RADIUS: usize> Board<RADIUS> {
     }
 }
 
-impl<const RADIUS: usize> Default for Board<RADIUS> {
-    fn default() -> Self {
-        Self::new()
+
+impl<const RADIUS: usize> Display for Board<RADIUS> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::ascii::draw_game_position::<RADIUS>(&self.state, f)
     }
 }
 
