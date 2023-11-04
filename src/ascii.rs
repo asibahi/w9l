@@ -2,19 +2,24 @@ use crate::game_data::*;
 use colored::Colorize;
 use hexx::Hex;
 use itertools::Itertools;
-use std::{cell::OnceCell, collections::HashMap, error::Error, fmt::Write};
+use std::{
+    cell::OnceCell,
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt::Write,
+};
 
 pub fn run(size: u32) -> Result<(), Box<dyn Error>> {
-    let havannah_board = get_board(size);
-
-    draw_board(havannah_board)
+    // let havannah_board = get_board(size);
+    // draw_board_pointy(havannah_board)
+    draw_board_flat(size)
 }
 
 fn get_board(size: u32) -> impl ExactSizeIterator<Item = hexx::Hex> {
     hexx::shapes::hexagon(hexx::Hex::ZERO, size - 1)
 }
 
-fn draw_board(
+fn draw_board_pointy(
     havannah_board: impl ExactSizeIterator<Item = hexx::Hex>,
 ) -> Result<(), Box<dyn Error>> {
     let rows = havannah_board.group_by(|h| h.x);
@@ -103,6 +108,82 @@ fn draw_board(
     Ok(())
 }
 
+fn draw_board_flat(radius: u32) -> Result<(), Box<dyn Error>> {
+    let board = hexx::shapes::hexagon(hexx::Hex::ZERO, radius)
+        .enumerate()
+        .map(|(i, x)| (x, i % 100))
+        .collect::<HashMap<_, _>>();
+
+    // starting hex [x, y, z]
+    let mut tracker = Hex::new(radius as i32, 0); // [radius, 0, -radius]
+
+    let fill = |h| board[&h];
+
+    // directions
+    let bt_lft = Hex::new(-1, 1);
+    let bottom = Hex::new(-1, 0);
+    let bt_rgt = Hex::new(0, -1);
+    let dia_rgt = Hex::new(1, -2);
+
+    // buffer
+    let mut f = String::new();
+
+    let radius = radius as usize;
+
+    writeln!(f, "{:<pad$}__", "", pad = 3 * radius + 1)?;
+
+    for i in (0..radius).rev() {
+        let mut cursor = tracker;
+        write!(f, "{:<pad$}__/", "", pad = 3 * i + 1)?;
+        // inner cells
+        for _ in 0..(radius - i - 1) {
+            write!(f, "{:>2}\\__/", fill(cursor))?;
+            cursor += dia_rgt;
+        }
+
+        writeln!(f, "{:>2}\\__", fill(cursor))?;
+        tracker += bt_lft;
+    }
+
+    for i in 0..=radius {
+        // top line
+        let mut cursor = tracker;
+        write!(f, "/")?;
+        for _ in 0..radius {
+            write!(f, "{:>2}\\__/", fill(cursor))?;
+            cursor += dia_rgt;
+        }
+        writeln!(f, "{:>2}\\", fill(cursor))?;
+
+        // bottom line
+        cursor = tracker + bt_rgt;
+        for _ in 0..radius {
+            write!(f, "\\__/{:>2}", fill(cursor))?;
+            cursor += dia_rgt;
+        }
+        writeln!(f, "\\__/")?;
+        tracker += bottom;
+    }
+
+    tracker += dia_rgt;
+
+    for i in 0..radius {
+        let mut cursor = tracker;
+        write!(f, "{:>pad$}", "", pad = 3 * i + 3)?;
+
+        for _ in 0..(radius - i - 1) {
+            write!(f, "\\__/{:>2}", fill(cursor))?;
+            cursor += dia_rgt;
+        }
+        writeln!(f, "\\__/")?;
+        tracker += bt_rgt;
+    }
+
+    println!("{}", f);
+    Ok(())
+}
+
+// print the boards in impl_1 and impl_2
 pub fn draw_game_position(
     havannah_board: &HashMap<Hex, Option<Stone>>,
     f: &mut std::fmt::Formatter<'_>,
