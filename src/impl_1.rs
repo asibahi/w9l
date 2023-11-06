@@ -10,11 +10,11 @@ use std::{
     fmt::{Display, Write},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Board<const RADIUS: usize> {
     pub state: HashMap<Hex, Option<Stone>>,
     to_move: Player,
-    last_move: Option<Hex>,
+    game_state: GameState,
     groups: SlotMap<GroupId, Group>,
     turn: usize,
 }
@@ -31,13 +31,17 @@ impl<const RADIUS: usize> Board<RADIUS> {
         Self {
             state,
             to_move: Player::Black,
-            last_move: None,
+            game_state: GameState::Ongoing,
             groups: SlotMap::with_key(),
             turn: 0,
         }
     }
 
-    pub fn move_at(&mut self, input_hex: Hex) -> Result<GameState, Box<dyn Error>> {
+    pub fn get_game_state(&self) -> GameState {
+        self.game_state
+    }
+
+    pub fn move_at(&mut self, input_hex: Hex) -> Result<(), Box<dyn Error>> {
         match self.state.get(&input_hex) {
             None => return Err("Illegal Move: Hex out of bounds".into()),
             Some(Some(_)) => return Err("Illegal Move: Hex already occupied".into()),
@@ -58,7 +62,7 @@ impl<const RADIUS: usize> Board<RADIUS> {
             .collect::<Vec<_>>();
 
         // determine group membership
-        let group_id = {
+        let chosen_id = {
             if neighbor_groups.is_empty() {
                 // no surrounding stones.
                 self.groups.insert_with_key(Group::new)
@@ -87,7 +91,7 @@ impl<const RADIUS: usize> Board<RADIUS> {
                 .collect::<Vec<_>>();
 
             // determine the placed stone's group as the chosen one
-            let final_group = self.get_mut_group(group_id);
+            let final_group = self.get_mut_group(chosen_id);
 
             for grp in grps_to_be_merged {
                 final_group.merge(&grp);
@@ -95,23 +99,21 @@ impl<const RADIUS: usize> Board<RADIUS> {
 
             // semi-clean up : all neighboring stones are set to the final group.
             for (h, _) in neighbor_groups {
-                self.state.get_mut(&h).unwrap().as_mut().unwrap().group_id = group_id;
+                self.state.get_mut(&h).unwrap().as_mut().unwrap().group_id = chosen_id;
             }
         }
 
         // place the stone
         _ = self.state.get_mut(&input_hex).unwrap().insert(Stone {
             owner: self.to_move,
-            group_id,
+            group_id: chosen_id,
         });
 
+        self.turn += 1;
+        
         // update board and group and check wins
-        self.last_move = Some(input_hex);
-        let group = self.get_mut_group(group_id);
-
-        if group.add_hex_and_check_ring(input_hex) {
-            return Ok(GameState::Win(self.to_move, WinCon::Ring));
-        }
+        let group = self.get_mut_group(chosen_id);
+        group.add_hex(input_hex);
 
         // if input_hex is corner or edge
         match input_hex.to_cubic_array().map(|c| (c / RADIUS as i32)) {
@@ -140,21 +142,26 @@ impl<const RADIUS: usize> Board<RADIUS> {
             _ => unreachable!("out of bounds"),
         }
 
-        if group.check_bridge() {
-            return Ok(GameState::Win(self.to_move, WinCon::Bridge));
-        }
-        if group.check_fork() {
-            return Ok(GameState::Win(self.to_move, WinCon::Fork));
+        if group.check_ring() {
+            self.game_state = GameState::Win(self.to_move, WinCon::Ring);
+        } else if group.check_bridge() {
+            self.game_state = GameState::Win(self.to_move, WinCon::Bridge);
+        } else if group.check_fork() {
+            self.game_state = GameState::Win(self.to_move, WinCon::Fork);
+        } else if self.turn >= Self::CELL_COUNT {
+            self.game_state = GameState::Draw;
         }
 
-        // AND FINALLY
-        self.turn += 1;
-        if self.turn >= Self::CELL_COUNT {
-            Ok(GameState::Draw)
-        } else {
-            self.to_move = self.to_move.flip();
-            Ok(GameState::Ongoing)
+        self.to_move = self.to_move.flip();
+        Ok(())
+    }
+
+    fn get_group(&self, group_id: GroupId) -> &Group {
+        match self.groups.get(group_id) {
+            Some(_) => self.groups.get(group_id),
+            None => self.groups.values().find(|g| g.merged_with(&group_id)),
         }
+        .expect("GroupId not found for any Group.")
     }
 
     fn get_mut_group(&mut self, group_id: GroupId) -> &mut Group {
@@ -166,14 +173,13 @@ impl<const RADIUS: usize> Board<RADIUS> {
     }
 }
 
-
 impl<const RADIUS: usize> Display for Board<RADIUS> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         crate::ascii::draw_game_position::<RADIUS>(&self.state, f)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Group {
     edges: u8,
     corners: u8,
@@ -201,8 +207,15 @@ impl Group {
         self.merged_ids.contains(id)
     }
 
-    pub fn add_hex_and_check_ring(&mut self, hex: Hex) -> bool {
+    pub fn add_hex(&mut self, hex: Hex) {
         self.stones.push(hex);
+    }
+
+    pub fn check_ring(&self) -> bool {
+        // assumes this function is called after every move. assumption might not hold with the minimax library
+        let Some(&hex) = self.stones.last() else {
+            return false;
+        };
 
         // algo from http://havannah.ewalds.ca/static/thesis.pdf
         // No ring for smaller groups

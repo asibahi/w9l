@@ -1,6 +1,5 @@
 use hexx::Hex;
 
-use w9l::game_data::*;
 use w9l::impl_1::Board;
 
 fn main() {
@@ -22,13 +21,9 @@ fn main() {
 
     println!("{}", game);
 
-    match _x {
-        GameState::Win(_, WinCon::Bridge) => println!("bridge win"),
-        GameState::Win(_, WinCon::Fork) => println!("fork win"),
-        GameState::Win(_, WinCon::Ring) => println!("ring win"),
-        GameState::Draw => println!("draw"),
-        GameState::Ongoing => println!("ongoing"),
-    }
+    let foo = game.get_game_state();
+
+    println!("{foo:?}");
 
     //w9l::ascii::run(3).map_err(|e| {eprint!("error:{e}"); e}).ok();
 }

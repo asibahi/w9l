@@ -6,11 +6,11 @@ use std::{collections::HashMap, fmt::Display};
 
 type Error = Box<dyn std::error::Error>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Board<const RADIUS: usize> {
     pub state: HashMap<Hex, Option<Stone>>,
     to_move: Player,
-    last_move: Option<Hex>,
+    game_state: GameState,
     groups: SlotMap<GroupId, Either<Group, GroupId>>,
     turn: usize,
 }
@@ -27,13 +27,17 @@ impl<const RADIUS: usize> Board<RADIUS> {
         Self {
             state,
             to_move: Player::Black,
-            last_move: None,
+            game_state: GameState::Ongoing,
             groups: SlotMap::with_key(),
             turn: 0,
         }
     }
 
-    pub fn move_at(&mut self, input_hex: Hex) -> Result<GameState, Error> {
+    pub fn get_game_state(&self) -> GameState {
+        self.game_state
+    }
+
+    pub fn move_at(&mut self, input_hex: Hex) -> Result<(), Error> {
         match self.state.get(&input_hex) {
             None => return Err("Illegal Move: Hex out of bounds".into()),
             Some(Some(_)) => return Err("Illegal Move: Hex already occupied".into()),
@@ -91,13 +95,11 @@ impl<const RADIUS: usize> Board<RADIUS> {
             group_id: chosen_id,
         });
 
-        // update board and group and check wins
-        self.last_move = Some(input_hex);
-        let group = self.get_mut_group(chosen_id);
+        self.turn += 1;
 
-        if group.add_hex_and_check_ring(input_hex) {
-            return Ok(GameState::Win(self.to_move, WinCon::Ring));
-        }
+        // update board and group and check wins
+        let group = self.get_mut_group(chosen_id);
+        group.add_hex(input_hex);
 
         // if input_hex is corner or edge
         match input_hex.to_cubic_array().map(|c| (c / RADIUS as i32)) {
@@ -125,22 +127,18 @@ impl<const RADIUS: usize> Board<RADIUS> {
 
             _ => unreachable!("out of bounds"),
         }
+        if group.check_ring() {
+            self.game_state = GameState::Win(self.to_move, WinCon::Ring);
+        } else if group.check_bridge() {
+            self.game_state = GameState::Win(self.to_move, WinCon::Bridge);
+        } else if group.check_fork() {
+            self.game_state = GameState::Win(self.to_move, WinCon::Fork);
+        } else if self.turn >= Self::CELL_COUNT {
+            self.game_state = GameState::Draw;
+        }
 
-        if group.check_bridge() {
-            return Ok(GameState::Win(self.to_move, WinCon::Bridge));
-        }
-        if group.check_fork() {
-            return Ok(GameState::Win(self.to_move, WinCon::Fork));
-        }
-
-        // AND FINALLY
-        self.turn += 1;
-        if self.turn >= Self::CELL_COUNT {
-            Ok(GameState::Draw)
-        } else {
-            self.to_move = self.to_move.flip();
-            Ok(GameState::Ongoing)
-        }
+        self.to_move = self.to_move.flip();
+        Ok(())
     }
 
     fn get_mut_group(&mut self, group_id: GroupId) -> &mut Group {
@@ -158,14 +156,13 @@ impl<const RADIUS: usize> Board<RADIUS> {
     }
 }
 
-
 impl<const RADIUS: usize> Display for Board<RADIUS> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         crate::ascii::draw_game_position::<RADIUS>(&self.state, f)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Group {
     edges: u8,
     corners: u8,
@@ -186,9 +183,15 @@ impl Group {
         self.stones.extend(&other.stones);
     }
 
-    pub fn add_hex_and_check_ring(&mut self, hex: Hex) -> bool {
+    pub fn add_hex(&mut self, hex: Hex) {
         self.stones.push(hex);
+    }
 
+    pub fn check_ring(&self) -> bool {
+        // assumes this function is called after every move. assumption might not hold with the minimax library
+        let Some(&hex) = self.stones.last() else {
+            return false;
+        };
         // algo from http://havannah.ewalds.ca/static/thesis.pdf
         // No ring for smaller groups
         self.stones.len() >= 6

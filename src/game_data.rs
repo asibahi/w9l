@@ -25,12 +25,14 @@ pub struct Stone {
 
 new_key_type! { pub struct GroupId; }
 
+#[derive(Debug, Clone, Copy)]
 pub enum GameState {
     Win(Player, WinCon),
     Draw,
     Ongoing,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum WinCon {
     Bridge, // connect two corners
     Fork,   // connect three edges
