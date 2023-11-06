@@ -1,4 +1,4 @@
-use crate::impl_2::Board;
+use crate::board::Board;
 use minimax::*;
 
 struct Game;
