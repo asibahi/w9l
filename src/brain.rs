@@ -36,8 +36,6 @@ impl minimax::Game for Game {
 pub fn run_() {
     let mut state = Board::new();
     perft::<Game>(&mut state, 100, true);
-
-    //  println!("{foo:?}");
 }
 
 pub fn run() {
@@ -50,15 +48,15 @@ pub fn run() {
         while self::Game::get_winner(&b).is_none() {
             // println!("{}", b);
             if s == 0 {
-                // let mut strategy = MonteCarloTreeSearch::<crate::brain::Game>::new(
-                //     MCTSOptions::default().with_rollouts_before_expanding(5),
-                // );
-                // strategy.set_timeout(Duration::from_secs(1));
-                let mut strategy = Random::<crate::brain::Game>::new();
+                let mut strategy = MonteCarloTreeSearch::<crate::brain::Game>::new(
+                    MCTSOptions::default().with_rollouts_before_expanding(5),
+                );
+                strategy.set_timeout(std::time::Duration::from_secs(1));
+                // let mut strategy = Random::<crate::brain::Game>::new();
 
                 match strategy.choose_move(&mut b) {
                     Some(m) => {
-                        // println!("{m:?}");
+                        print!("{m:?}\t");
                         b = self::Game::apply(&mut b, m).unwrap();
                     }
                     None => break,
@@ -71,7 +69,7 @@ pub fn run() {
                 let mut strategy = Random::<crate::brain::Game>::new();
                 match strategy.choose_move(&mut b) {
                     Some(m) => {
-                        // println!("{m:?}");
+                        println!("{m:?}");
                         b = self::Game::apply(&mut b, m).unwrap();
                     }
                     None => break,
@@ -84,7 +82,7 @@ pub fn run() {
         let state = b.get_game_state();
 
         println!("{state:?}");
-        // println!("{b}");
+        println!("{b}");
         gs = state;
     }
 }
