@@ -20,7 +20,7 @@ impl minimax::Game for Game {
 
     fn apply(state: &mut Self::S, m: Self::M) -> Option<Self::S> {
         let mut state = state.clone();
-        state.move_at(m).ok();
+        state.move_at_raw(m).ok();
         Some(state)
     }
 

@@ -37,7 +37,7 @@ impl<const RADIUS: usize> Board<RADIUS> {
         self.game_state
     }
 
-    pub fn move_at(&mut self, input_hex: Hex) -> Result<(), Error> {
+    pub fn move_at_raw(&mut self, input_hex: Hex) -> Result<(), Error> {
         match self.state.get(&input_hex) {
             None => return Err("Illegal Move: Hex out of bounds".into()),
             Some(Some(_)) => return Err("Illegal Move: Hex already occupied".into()),
@@ -139,6 +139,19 @@ impl<const RADIUS: usize> Board<RADIUS> {
 
         self.to_move = self.to_move.flip();
         Ok(())
+    }
+
+    pub fn move_at(&mut self, rank: char, file: usize) -> Result<(), Error> {
+        // rank 'a' is the Z coordinate at RADIUS, increases as Z decreases to -RADIUS
+        // file '1' is the X coordinate at -RADIUS, increases as X increases to RADIUS
+
+        let x = file as i32 - 1 - RADIUS as i32;
+        let y = {
+            let rank = rank as u8 - b'a';
+            let z = RADIUS as i32 - rank as i32;
+            0 - x - z
+        };
+        self.move_at_raw(Hex { x, y })
     }
 
     fn get_mut_group(&mut self, group_id: GroupId) -> &mut Group {
