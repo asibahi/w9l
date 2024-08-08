@@ -17,6 +17,12 @@ pub struct Board<const RADIUS: usize> {
     turn: usize,
 }
 
+impl<const RADIUS: usize> Default for Board<RADIUS> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const RADIUS: usize> Board<RADIUS> {
     pub const SIZE: usize = RADIUS + 1;
     const CELL_COUNT: usize = 1 + 3 * RADIUS * (RADIUS + 1); // RedBlob
@@ -79,7 +85,7 @@ impl<const RADIUS: usize> Board<RADIUS> {
             };
 
             // merge
-            chosen_group.merge(&working_group);
+            chosen_group.merge(working_group);
             self.groups[working_id] = Right(chosen_id);
         }
 
@@ -177,7 +183,7 @@ impl<const RADIUS: usize> Display for Board<RADIUS> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Group {
     edges: u8,
     corners: u8,
@@ -185,11 +191,7 @@ pub struct Group {
 }
 impl Group {
     pub fn new() -> Self {
-        Self {
-            edges: 0,
-            corners: 0,
-            stones: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn merge(&mut self, other: &Self) {
@@ -219,7 +221,7 @@ impl Group {
                 >= 2
         // Search for self. 
             && Direction::ALL_DIRECTIONS[..4]
-                .into_iter()
+                .iter()
                 .any(|&dir| self.search_dir(hex, dir, hex))
     }
 

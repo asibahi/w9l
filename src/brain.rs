@@ -54,7 +54,7 @@ pub fn run() {
                 strategy.set_timeout(std::time::Duration::from_secs(1));
                 // let mut strategy = Random::<crate::brain::Game>::new();
 
-                match strategy.choose_move(&mut b) {
+                match strategy.choose_move(& b) {
                     Some(m) => {
                         print!("{m:?}\t");
                         b = self::Game::apply(&mut b, m).unwrap();
@@ -67,7 +67,7 @@ pub fn run() {
                 // );
                 // strategy.set_timeout(Duration::from_secs(1));
                 let mut strategy = Random::<crate::brain::Game>::new();
-                match strategy.choose_move(&mut b) {
+                match strategy.choose_move(& b) {
                     Some(m) => {
                         println!("{m:?}");
                         b = self::Game::apply(&mut b, m).unwrap();
