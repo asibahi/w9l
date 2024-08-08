@@ -8,6 +8,8 @@ type Error = Box<dyn std::error::Error>;
 
 #[derive(Debug, Clone)]
 pub struct Board<const RADIUS: usize> {
+    // one alternate implementation is to use Bitboards.
+    // The bittle crate might be useful here.
     pub state: HashMap<Hex, Option<Stone>>,
     to_move: Player,
     game_state: GameState,
